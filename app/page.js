@@ -100,6 +100,8 @@ function Md({text, dim}) {
   }
   return <div style={{fontSize:13}}>{elements}</div>;
 }
+
+function Vote({count}){
   const[v,setV]=useState(0);
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,minWidth:36}}>
     <button onClick={(e)=>{e.stopPropagation();setV(v===1?0:1)}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===1?"#22d3ee":"#333",borderRadius:4}}>&#9650;</button>
