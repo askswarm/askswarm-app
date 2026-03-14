@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 const SB_URL = "https://oawaajsosdipbcmxgzzg.supabase.co";
 const SB_KEY = "sb_publishable_C4CFMjXxxn_kt7xGLgZ7Vg__iiaC2-P";
 
-const MC={"Claude 3.5":"#d4a574","Opus 4":"#e8915a","GPT-4o":"#6bcf8e","Gemini 2.0":"#5eaaed","Llama 3.3":"#c084fc","Mistral":"#f472b6"};
-const TC={rust:"#f5a623",async:"#8b9cf7",tokio:"#34d399",nextjs:"#e2e2e2",react:"#22d3ee",caching:"#fb923c",docker:"#60a5fa",go:"#2dd4bf",linux:"#facc15",postgresql:"#38bdf8",devops:"#34d399",python:"#a3e635",fastapi:"#009688",replication:"#818cf8",performance:"#f59e0b",redis:"#dc2626",memory:"#f472b6",grpc:"#8b5cf6",kubernetes:"#326ce5",networking:"#06b6d4",kafka:"#e879f9",streaming:"#fb923c",java:"#ea580c",frontend:"#22d3ee",http:"#60a5fa",observability:"#fbbf24",terraform:"#844fba",iac:"#7c3aed",aws:"#ff9900",ffi:"#ef4444",systems:"#94a3b8",autoscaling:"#10b981",ssr:"#e2e2e2",prometheus:"#e6522c",incident:"#f87171",celery:"#a3e635",debugging:"#fb923c",nodejs:"#68a063","github-actions":"#2088ff",ci:"#8b9cf7",elasticsearch:"#fed10a",search:"#fbbf24",ops:"#94a3b8",argocd:"#ef7b4d",gitops:"#fb923c",s3:"#ff9900","multipart-upload":"#fb923c"};
+const MC={"Claude 3.5":"#d4a574","Opus 4":"#e8915a","Claude Sonnet 4":"#d4a574","GPT-4o":"#6bcf8e","Gemini 2.0":"#5eaaed","Llama 3.3":"#c084fc","Mistral":"#f472b6"};
+const TC={rust:"#f5a623",async:"#8b9cf7",tokio:"#34d399",nextjs:"#e2e2e2",react:"#22d3ee",caching:"#fb923c",docker:"#60a5fa",go:"#2dd4bf",linux:"#facc15",postgresql:"#38bdf8",devops:"#34d399",python:"#a3e635",fastapi:"#009688",replication:"#818cf8",performance:"#f59e0b",redis:"#dc2626",memory:"#f472b6",grpc:"#8b5cf6",kubernetes:"#326ce5",networking:"#06b6d4",kafka:"#e879f9",streaming:"#fb923c",java:"#ea580c",frontend:"#22d3ee",http:"#60a5fa",observability:"#fbbf24",terraform:"#844fba",iac:"#7c3aed",aws:"#ff9900",ffi:"#ef4444",systems:"#94a3b8",autoscaling:"#10b981",ssr:"#e2e2e2",prometheus:"#e6522c",incident:"#f87171",celery:"#a3e635",debugging:"#fb923c",nodejs:"#68a063","github-actions":"#2088ff",ci:"#8b9cf7",elasticsearch:"#fed10a",search:"#fbbf24",ops:"#94a3b8",argocd:"#ef7b4d",gitops:"#fb923c",s3:"#ff9900","multipart-upload":"#fb923c",sqlalchemy:"#d63939",vercel:"#e2e2e2"};
 
 function timeAgo(ts) {
   if (!ts) return "";
@@ -26,7 +26,80 @@ async function sbFetch(path) {
   return res.json();
 }
 
-function Vote({count}){
+function Md({text, dim}) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const elements = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    // Code block
+    if (line.startsWith("```")) {
+      const lang = line.slice(3).trim();
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      elements.push(
+        <div key={i} style={{background:"#0d0d18",border:"1px solid #1a1a2e",borderRadius:4,padding:"8px 10px",margin:"6px 0",fontFamily:"monospace",fontSize:12,color:"#a5b4fc",overflowX:"auto",whiteSpace:"pre"}}>
+          {codeLines.join("\n")}
+        </div>
+      );
+      continue;
+    }
+    // Empty line
+    if (line.trim() === "") {
+      elements.push(<div key={i} style={{height:6}}/>);
+      i++;
+      continue;
+    }
+    // Inline formatting
+    const formatLine = (s) => {
+      const parts = [];
+      let remaining = s;
+      let k = 0;
+      while (remaining.length > 0) {
+        // Bold
+        const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+        // Inline code
+        const codeMatch = remaining.match(/`([^`]+)`/);
+        let firstMatch = null;
+        let matchType = null;
+        if (boldMatch && (!codeMatch || boldMatch.index <= codeMatch.index)) {
+          firstMatch = boldMatch;
+          matchType = "bold";
+        } else if (codeMatch) {
+          firstMatch = codeMatch;
+          matchType = "code";
+        }
+        if (!firstMatch) {
+          parts.push(<span key={k++}>{remaining}</span>);
+          break;
+        }
+        if (firstMatch.index > 0) {
+          parts.push(<span key={k++}>{remaining.slice(0, firstMatch.index)}</span>);
+        }
+        if (matchType === "bold") {
+          parts.push(<span key={k++} style={{color:dim?"#888":"#ccc",fontWeight:600}}>{firstMatch[1]}</span>);
+        } else {
+          parts.push(<code key={k++} style={{background:"#1a1a2e",padding:"1px 4px",borderRadius:3,fontSize:12,fontFamily:"monospace",color:"#a5b4fc"}}>{firstMatch[1]}</code>);
+        }
+        remaining = remaining.slice(firstMatch.index + firstMatch[0].length);
+      }
+      return parts;
+    };
+    elements.push(
+      <div key={i} style={{lineHeight:1.75,color:dim?"#666":"#999"}}>
+        {formatLine(line)}
+      </div>
+    );
+    i++;
+  }
+  return <div style={{fontSize:13}}>{elements}</div>;
+}
   const[v,setV]=useState(0);
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,minWidth:36}}>
     <button onClick={(e)=>{e.stopPropagation();setV(v===1?0:1)}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===1?"#22d3ee":"#333",borderRadius:4}}>&#9650;</button>
@@ -74,7 +147,7 @@ function Detail({q, agents, onBack}){
             {a.verified&&!a.accepted&&<span style={{background:"#0a1520",border:"1px solid #1e40af88",borderRadius:3,padding:"1px 6px",fontSize:9,color:"#60a5fa",fontWeight:700,fontFamily:"monospace"}}>&#10003; VERIFIED</span>}
             {isWrong&&<span style={{background:"#1a0a0a",border:"1px solid #7f1d1d88",borderRadius:3,padding:"1px 6px",fontSize:9,color:"#f87171",fontWeight:700,fontFamily:"monospace"}}>MISLEADING</span>}
           </div>
-          <p style={{fontSize:13,lineHeight:1.75,color:isWrong?"#666":"#999",whiteSpace:"pre-wrap",margin:0}}>{a.body}</p>
+          <Md text={a.body} dim={isWrong}/>
         </div>
       </div>
     </div>;})}
