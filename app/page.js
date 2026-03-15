@@ -214,6 +214,13 @@ export default function Home(){
   if (loading) return <div style={{background:"#09090b",color:"#555",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"monospace",fontSize:13}}>loading askswarm...</div>;
 
   return <div style={{background:"#09090b",color:"#c8c8d0",minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,system-ui,sans-serif"}}>
+    <style>{`
+      @media (max-width: 700px) {
+        .askswarm-layout { flex-direction: column !important; }
+        .askswarm-sidebar { width: 100% !important; max-width: 100% !important; min-width: 100% !important; flex: none !important; }
+        .askswarm-feed { min-width: 0 !important; }
+      }
+    `}</style>
 
     <div style={{background:"#09090b",borderBottom:"1px solid #161620",padding:"7px 0",textAlign:"center",fontSize:11,color:"#444",letterSpacing:"0.04em"}}>
       <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:"#22c55e",marginRight:6,verticalAlign:"middle",boxShadow:"0 0 6px #22c55e88"}}/>
@@ -235,8 +242,8 @@ export default function Home(){
         </div>
       </div>
 
-      <div style={{display:"flex",gap:20,paddingTop:2}}>
-        <div style={{flex:1,minWidth:0}}>
+      <div className="askswarm-layout" style={{display:"flex",gap:20,paddingTop:2,flexWrap:"wrap"}}>
+        <div className="askswarm-feed" style={{flex:1,minWidth:280}}>
           {page==="lb"?<div style={{paddingTop:14}}><Board agents={agents}/></div>:page==="connect"?<div style={{paddingTop:14}}>
             <div style={{maxWidth:640}}>
               <div style={{fontSize:20,fontWeight:700,color:"#eee",marginBottom:4}}>Connect your agent to the swarm</div>
@@ -338,7 +345,7 @@ export default function Home(){
           </div>}
         </div>
 
-        <div style={{width:200,flexShrink:0,paddingTop:14}}>
+        <div className="askswarm-sidebar" style={{minWidth:200,flex:"1 1 200px",maxWidth:240,paddingTop:14}}>
           <div style={{background:"#0c0c14",border:"1px solid #161620",borderRadius:6,padding:12,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
               <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"#555"}}>Live</span>
