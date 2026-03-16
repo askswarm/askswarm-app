@@ -3,6 +3,7 @@ export const runtime = "edge";
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_KEY;
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY;
 const AGENT_SECRET = process.env.AGENT_SECRET;
 
 async function sbGet(path) {
@@ -30,25 +31,7 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-async function generateQuestion(existingTitles) {
-  const titleList = existingTitles.length > 0
-    ? "Existing questions (do NOT duplicate these):\n" + existingTitles.map((t, i) => (i + 1) + ". " + t).join("\n")
-    : "No existing questions yet.";
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + OPENAI_KEY,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      temperature: 0.9,
-      max_tokens: 800,
-      messages: [
-        {
-          role: "system",
-          content: `You generate one realistic, difficult technical question for askswarm.dev — a Q&A platform where AI agents solve engineering problems.
+const SYSTEM_PROMPT = `You generate one realistic, difficult technical question for askswarm.dev — a Q&A platform where AI agents solve engineering problems.
 
 Requirements:
 - Audience: senior backend / infra / platform engineers
@@ -61,12 +44,22 @@ Requirements:
 Good topics: PostgreSQL, Redis, Kafka, Kubernetes, Nginx, Terraform, Go, Rust, Python asyncio, Docker, observability, replication, memory, caching, latency, DNS, autoscaling, gRPC, CI/CD, Elasticsearch
 
 Respond with ONLY valid JSON, no markdown, no backticks:
-{"title": "...", "body": "...", "tags": ["tag1", "tag2", "tag3"]}`
-        },
-        {
-          role: "user",
-          content: titleList + "\n\nGenerate one new question."
-        }
+{"title": "...", "body": "...", "tags": ["tag1", "tag2", "tag3"]}`;
+
+async function generateWithGPT(titleList) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + OPENAI_KEY,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      temperature: 0.9,
+      max_tokens: 800,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: titleList + "\n\nGenerate one new question." }
       ],
     }),
   });
@@ -78,15 +71,44 @@ Respond with ONLY valid JSON, no markdown, no backticks:
 
   const data = await res.json();
   const raw = data.choices[0].message.content.trim();
-
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed.title || !parsed.body || !parsed.tags) {
-      return { error: "Incomplete question generated" };
-    }
-    return { question: parsed };
+    return { question: JSON.parse(raw) };
   } catch {
-    return { error: "JSON parse failed: " + raw.slice(0, 200) };
+    return { error: "GPT JSON parse failed: " + raw.slice(0, 200) };
+  }
+}
+
+async function generateWithClaude(titleList) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": CLAUDE_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 800,
+      temperature: 0.9,
+      system: SYSTEM_PROMPT,
+      messages: [{
+        role: "user",
+        content: titleList + "\n\nGenerate one new question."
+      }],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return { error: "Claude " + res.status + ": " + text };
+  }
+
+  const data = await res.json();
+  const raw = data.content[0].text.trim();
+  try {
+    return { question: JSON.parse(raw) };
+  } catch {
+    return { error: "Claude JSON parse failed: " + raw.slice(0, 200) };
   }
 }
 
@@ -98,27 +120,36 @@ export async function GET(request) {
   }
 
   try {
-    if (!SB_URL || !SB_KEY || !OPENAI_KEY) {
-      return new Response(JSON.stringify({
-        error: "missing env vars",
-        has_sb_url: !!SB_URL,
-        has_sb_key: !!SB_KEY,
-        has_openai_key: !!OPENAI_KEY,
-      }), { status: 500 });
+    if (!SB_URL || !SB_KEY) {
+      return new Response(JSON.stringify({ error: "missing env vars" }), { status: 500 });
     }
 
     // Get existing titles to avoid duplicates
     const existing = await sbGet("questions?select=title&order=created_at.desc&limit=25");
     const titles = (existing || []).map(q => q.title);
+    const titleList = titles.length > 0
+      ? "Existing questions (do NOT duplicate these):\n" + titles.map((t, i) => (i + 1) + ". " + t).join("\n")
+      : "No existing questions yet.";
+
+    // Randomly pick model — alternate between Claude and GPT-4o
+    const useClaude = Math.random() > 0.5 && CLAUDE_KEY;
+    const model = useClaude ? "claude" : "gpt4o";
+    const agentId = useClaude ? "swarm-agent-1" : "swarm-agent-2";
 
     // Generate question
-    const result = await generateQuestion(titles);
+    const result = useClaude
+      ? await generateWithClaude(titleList)
+      : await generateWithGPT(titleList);
 
     if (result.error) {
       return new Response(JSON.stringify({ error: result.error }), { status: 500 });
     }
 
     const q = result.question;
+    if (!q.title || !q.body || !q.tags) {
+      return new Response(JSON.stringify({ error: "Incomplete question" }), { status: 500 });
+    }
+
     const id = "q-" + Date.now();
 
     // Insert into Supabase
@@ -127,7 +158,7 @@ export async function GET(request) {
       title: q.title,
       body: q.body,
       tags: q.tags,
-      agent_id: "swarm-agent-2",
+      agent_id: agentId,
       votes: 0,
       reuses: 0,
       status: "open",
@@ -135,6 +166,7 @@ export async function GET(request) {
 
     return new Response(JSON.stringify({
       ok: true,
+      model,
       question: inserted ? inserted[0] : { id, title: q.title },
     }));
 
