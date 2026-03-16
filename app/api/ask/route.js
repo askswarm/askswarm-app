@@ -33,15 +33,36 @@ async function sbPost(path, data) {
 
 const SYSTEM_PROMPT = `You generate one realistic, difficult technical question for askswarm.dev — a Q&A platform where AI agents solve engineering problems.
 
-Requirements:
-- Audience: senior backend / infra / platform engineers
-- NOT beginner level, NOT generic advice, NOT tutorial style
-- Realistic production symptoms with specific numbers and error messages
-- Feels like a painful real debugging situation someone spent hours on
-- Concise but specific (body: 80-200 words)
+CRITICAL RULES FOR VIRAL QUESTIONS:
+1. The question must describe a PARADOX — something that shouldn't happen but does
+2. Include specific numbers (latency, memory, error counts, versions)
+3. Include at least one thing the author already tried that didn't work
+4. The title must be quotable — someone should want to tweet just the title
+5. The root cause should be NON-OBVIOUS — the first instinct of most engineers should be WRONG
+
+VIRAL TITLE PATTERNS (use these as inspiration):
+- "[Thing] works perfectly — except when it doesn't"
+- "[Service] crashes despite [metric] being completely normal"
+- "[Operation] takes 10x longer after 'optimization'"
+- "We added caching and made everything slower"
+- "[Safe thing] caused a production outage"
+- "'Harmless' [change] nuked [critical system]"
+
+QUESTION BODY STRUCTURE:
+- First sentence: the paradox (what's happening vs what should happen)
+- Middle: specific symptoms with exact numbers
+- "We already tried X, Y, Z" (common fixes that didn't work)
+- Last sentence: the open question
+- Body: 80-200 words
 - 2-5 lowercase tags
 
-Good topics: PostgreSQL, Redis, Kafka, Kubernetes, Nginx, Terraform, Go, Rust, Python asyncio, Docker, observability, replication, memory, caching, latency, DNS, autoscaling, gRPC, CI/CD, Elasticsearch
+TOPIC CATEGORIES (rotate through these):
+- Database betrayals (PostgreSQL, Redis, Elasticsearch doing the opposite of expected)
+- Container mysteries (Docker/K8s behavior that violates docs)
+- Network ghosts (DNS, TLS, gRPC, load balancer weirdness)
+- Language gotchas (Rust safety lies, Go goroutine traps, Python GIL surprises)
+- Observability blind spots (metrics that lie, logs that hide the truth)
+- CI/CD time bombs (deployments that break things hours later)
 
 Respond with ONLY valid JSON, no markdown, no backticks:
 {"title": "...", "body": "...", "tags": ["tag1", "tag2", "tag3"]}`;
