@@ -31,7 +31,9 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-// Target repos with real agent/MCP/AI-SDK problems
+// ============================================================
+// SOURCE 1: GitHub Issues
+// ============================================================
 const REPOS = [
   "anthropics/claude-code",
   "modelcontextprotocol/servers",
@@ -42,71 +44,137 @@ const REPOS = [
   "openai/openai-python",
   "crewAIInc/crewAI",
   "n8n-io/n8n",
+  "microsoft/vscode-copilot-release",
+  "continuedev/continue",
+  "cline/cline",
 ];
 
-async function fetchGitHubIssues() {
-  // Pick 2-3 random repos per run to avoid rate limits
+async function fetchGitHub() {
   const shuffled = [...REPOS].sort(() => Math.random() - 0.5);
   const selected = shuffled.slice(0, 3);
-  
-  const allIssues = [];
-  
+  const all = [];
+
   for (const repo of selected) {
     try {
       const res = await fetch(
-        `https://api.github.com/repos/${repo}/issues?state=open&sort=updated&per_page=10&labels=bug`,
-        {
-          headers: {
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "askswarm-scraper",
-          },
-        }
+        "https://api.github.com/repos/" + repo + "/issues?state=open&sort=updated&per_page=8",
+        { headers: { "Accept": "application/vnd.github.v3+json", "User-Agent": "askswarm-scraper" } }
       );
-      
-      if (!res.ok) {
-        // Try without label filter
-        const res2 = await fetch(
-          `https://api.github.com/repos/${repo}/issues?state=open&sort=updated&per_page=10`,
-          {
-            headers: {
-              "Accept": "application/vnd.github.v3+json",
-              "User-Agent": "askswarm-scraper",
-            },
-          }
-        );
-        if (res2.ok) {
-          const issues = await res2.json();
-          allIssues.push(...issues.filter(i => !i.pull_request).map(i => ({ ...i, repo })));
-        }
-        continue;
-      }
-      
+      if (!res.ok) continue;
       const issues = await res.json();
-      // Filter out PRs (GitHub API returns PRs as issues too)
-      allIssues.push(...issues.filter(i => !i.pull_request).map(i => ({ ...i, repo })));
-    } catch (e) {
-      // Skip repos that fail
-      continue;
-    }
+      for (const i of issues) {
+        if (i.pull_request) continue;
+        all.push({
+          source: "github",
+          repo,
+          title: i.title,
+          body: (i.body || "").slice(0, 600),
+          comments: i.comments,
+          reactions: i.reactions?.total_count || 0,
+          labels: (i.labels || []).map(l => l.name).join(", "),
+          url: i.html_url,
+        });
+      }
+    } catch (e) { continue; }
   }
-  
-  return allIssues;
+  return all;
 }
 
-async function evaluateAndReformulate(issues, existingTitles) {
-  // Prepare issues summary for Claude
-  const issuesSummary = issues.slice(0, 15).map((issue, i) => {
-    const body = (issue.body || "").slice(0, 500);
-    return `ISSUE ${i + 1} [${issue.repo}]:
-Title: ${issue.title}
-Body: ${body}
-Comments: ${issue.comments}
-Reactions: ${issue.reactions?.total_count || 0}
-Labels: ${(issue.labels || []).map(l => l.name).join(", ")}`;
+// ============================================================
+// SOURCE 2: Reddit (AI agent subreddits)
+// ============================================================
+const SUBREDDITS = [
+  "ClaudeAI",
+  "cursor",
+  "LocalLLaMA",
+  "LangChain",
+  "ChatGPTPro",
+];
+
+async function fetchReddit() {
+  const sub = SUBREDDITS[Math.floor(Math.random() * SUBREDDITS.length)];
+  const all = [];
+
+  try {
+    const res = await fetch(
+      "https://www.reddit.com/r/" + sub + "/new.json?limit=15",
+      { headers: { "User-Agent": "askswarm-scraper/1.0" } }
+    );
+    if (!res.ok) return all;
+    const data = await res.json();
+    const posts = data?.data?.children || [];
+
+    for (const p of posts) {
+      const d = p.data;
+      if (!d.selftext || d.selftext.length < 100) continue;
+      if (d.link_flair_text === "Meme" || d.link_flair_text === "Funny") continue;
+      all.push({
+        source: "reddit",
+        repo: "r/" + sub,
+        title: d.title,
+        body: d.selftext.slice(0, 600),
+        comments: d.num_comments,
+        reactions: d.score,
+        labels: d.link_flair_text || "",
+        url: "https://reddit.com" + d.permalink,
+      });
+    }
+  } catch (e) { /* skip */ }
+  return all;
+}
+
+// ============================================================
+// SOURCE 3: StackOverflow (AI/MCP tags)
+// ============================================================
+const SO_TAGS = [
+  "langchain",
+  "openai-api",
+  "anthropic",
+  "llm",
+  "rag",
+  "vector-database",
+];
+
+async function fetchStackOverflow() {
+  const tag = SO_TAGS[Math.floor(Math.random() * SO_TAGS.length)];
+  const all = [];
+
+  try {
+    const res = await fetch(
+      "https://api.stackexchange.com/2.3/questions?order=desc&sort=activity&tagged=" + tag + "&site=stackoverflow&filter=withbody&pagesize=10"
+    );
+    if (!res.ok) return all;
+    const data = await res.json();
+
+    for (const q of (data.items || [])) {
+      if (!q.body || q.is_answered) continue;
+      // Strip HTML tags roughly
+      const body = q.body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 600);
+      all.push({
+        source: "stackoverflow",
+        repo: "so/" + tag,
+        title: q.title,
+        body,
+        comments: q.answer_count,
+        reactions: q.score,
+        labels: (q.tags || []).join(", "),
+        url: q.link,
+      });
+    }
+  } catch (e) { /* skip */ }
+  return all;
+}
+
+// ============================================================
+// EVALUATE: Pick the most CONTROVERSIAL problem
+// ============================================================
+async function evaluateAndReformulate(problems, existingTitles) {
+  const summary = problems.slice(0, 20).map((p, i) => {
+    return "PROBLEM " + (i + 1) + " [" + p.source + " / " + p.repo + "]:\nTitle: " + p.title + "\nBody: " + p.body + "\nEngagement: " + p.reactions + " votes, " + p.comments + " comments\nLabels: " + p.labels;
   }).join("\n\n---\n\n");
-  
+
   const titleList = existingTitles.length > 0
-    ? "\nExisting askswarm questions (do NOT duplicate these):\n" + existingTitles.map((t, i) => `${i + 1}. ${t}`).join("\n")
+    ? "\nExisting askswarm questions (do NOT duplicate):\n" + existingTitles.map((t, i) => (i + 1) + ". " + t).join("\n")
     : "";
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -119,33 +187,37 @@ Labels: ${(issue.labels || []).map(l => l.name).join(", ")}`;
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
-      temperature: 0.3,
-      system: `You are a content curator for askswarm.dev — a platform where AI agents solve engineering problems.
+      temperature: 0.4,
+      system: `You are a content curator for askswarm.dev — a platform where AI agents from DIFFERENT LLMs solve problems and challenge each other.
 
-Your job: Pick the BEST issue from the list below and reformulate it as an askswarm question.
+Your job: Pick the ONE problem most likely to generate DISAGREEMENT between AI models.
 
-SELECTION CRITERIA (in order of importance):
-1. REAL PAIN — the issue describes a problem that multiple developers face, not a niche edge case
-2. SOLVABLE — another AI agent could actually help diagnose or solve this
-3. INTERESTING — a senior engineer would stop scrolling to read this
-4. NOT DUPLICATE — doesn't overlap with existing askswarm questions
+SELECTION CRITERIA (in order of priority):
+1. AMBIGUOUS ROOT CAUSE — the problem could be caused by X or Y, and reasonable engineers would disagree
+2. OBVIOUS-ANSWER-IS-WRONG potential — the first instinct would lead you astray
+3. MULTIPLE VALID APPROACHES — not one right answer but several competing strategies
+4. REAL PAIN — high engagement (votes, comments) means real developers care
+5. NOT DUPLICATE — doesn't overlap with existing askswarm questions
+
+WHY THIS MATTERS:
+We want Claude to say "it's X" and GPT-4o to say "actually it's Y" and Gemini to say "you're both partially right but missing Z." That disagreement IS the value of the platform.
 
 REFORMULATION RULES:
-- Rewrite in your own words. Do NOT copy the GitHub issue verbatim.
-- Make the title quotable and paradoxical if possible ("X despite Y", "works in A but not B")
-- Include specific versions, error messages, and what was tried
+- Rewrite in your own words. Do NOT copy verbatim.
+- Make the title paradoxical: "X despite Y", "works in A but not B"
+- Include specific versions, error messages, what was tried
 - Body: 80-200 words
-- Add 2-5 lowercase tags from the AI agent ecosystem
-- The question should feel like a frustrated developer asking for help, not a bug report
+- 2-5 lowercase tags
+- The question should sound like a frustrated developer, not a bug report
 
-If NONE of the issues are suitable (all too niche, all duplicates, all feature requests), respond with:
+If NONE of the problems are suitable, respond with:
 {"skip": true, "reason": "..."}
 
 Otherwise respond with ONLY valid JSON:
-{"title": "...", "body": "...", "tags": ["tag1", "tag2"], "source_repo": "owner/repo", "source_issue": 123}`,
+{"title": "...", "body": "...", "tags": ["tag1", "tag2"], "source": "platform/location", "controversy_reason": "why agents will disagree on this"}`,
       messages: [{
         role: "user",
-        content: `Here are recent GitHub issues from AI agent repos:\n\n${issuesSummary}\n${titleList}\n\nPick the best one and reformulate it as an askswarm question.`
+        content: "Here are recent problems from GitHub, Reddit, and StackOverflow:\n\n" + summary + "\n" + titleList + "\n\nPick the one most likely to generate multi-model disagreement."
       }],
     }),
   });
@@ -164,6 +236,9 @@ Otherwise respond with ONLY valid JSON:
   }
 }
 
+// ============================================================
+// MAIN HANDLER
+// ============================================================
 export async function GET(request) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret");
@@ -172,41 +247,44 @@ export async function GET(request) {
   }
 
   try {
-    // 1. Fetch real GitHub issues
-    const issues = await fetchGitHubIssues();
-    
-    if (issues.length === 0) {
-      return new Response(JSON.stringify({ message: "No issues found", scraped: 0 }));
+    // 1. Fetch from all sources in parallel
+    const [github, reddit, stackoverflow] = await Promise.all([
+      fetchGitHub(),
+      fetchReddit(),
+      fetchStackOverflow(),
+    ]);
+
+    const allProblems = [...github, ...reddit, ...stackoverflow];
+
+    if (allProblems.length === 0) {
+      return new Response(JSON.stringify({ message: "No problems found", sources: { github: 0, reddit: 0, stackoverflow: 0 } }));
     }
 
-    // 2. Get existing titles to avoid duplicates
+    // 2. Get existing titles
     const existing = await sbGet("questions?select=title&order=created_at.desc&limit=30");
     const existingTitles = (existing || []).map(q => q.title);
 
-    // 3. Have Claude evaluate and pick the best one
-    const evaluation = await evaluateAndReformulate(issues, existingTitles);
-    
+    // 3. Claude picks the most controversial problem
+    const evaluation = await evaluateAndReformulate(allProblems, existingTitles);
+
     if (evaluation.error) {
       return new Response(JSON.stringify({ error: evaluation.error }), { status: 500 });
     }
 
     const result = evaluation.result;
-    
-    // Skip if no good issues found
+
     if (result.skip) {
-      return new Response(JSON.stringify({ 
-        message: "No suitable issues found", 
+      return new Response(JSON.stringify({
+        message: "No suitable problems",
         reason: result.reason,
-        scraped: issues.length 
+        sources: { github: github.length, reddit: reddit.length, stackoverflow: stackoverflow.length },
       }));
     }
 
     // 4. Post to askswarm
     const id = "q-" + Date.now();
-    
-    // Alternate between agents for posting
     const agentId = Math.random() > 0.5 ? "swarm-agent-1" : "swarm-agent-2";
-    
+
     const posted = await sbPost("questions", {
       id,
       title: result.title,
@@ -220,11 +298,16 @@ export async function GET(request) {
 
     return new Response(JSON.stringify({
       ok: true,
-      message: "Real issue scraped, evaluated, and posted",
+      message: "Controversial problem scraped and posted",
       question: posted ? posted[0] : { id, title: result.title },
-      source: result.source_repo + "#" + result.source_issue,
-      scraped_total: issues.length,
-      repos_checked: [...new Set(issues.map(i => i.repo))],
+      source: result.source,
+      controversy_reason: result.controversy_reason,
+      sources_scraped: {
+        github: github.length,
+        reddit: reddit.length,
+        stackoverflow: stackoverflow.length,
+        total: allProblems.length,
+      },
     }));
 
   } catch (err) {
