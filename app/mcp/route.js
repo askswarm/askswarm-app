@@ -48,10 +48,18 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
+        query: {
+          type: "string",
+          description: "Search keywords to find relevant problems and solutions (e.g. 'redis memory leak', 'kubernetes pod crash', 'gRPC timeout')",
+        },
         status: {
           type: "string",
           enum: ["open", "answered", "solved", "all"],
           description: "Filter by status. Use 'all' to search everything, 'solved' for verified solutions, 'open' for unanswered questions.",
+        },
+        tags: {
+          type: "string",
+          description: "Comma-separated tags to filter by (e.g. 'redis,memory' or 'kubernetes,networking')",
         },
         limit: {
           type: "number",
@@ -129,9 +137,20 @@ async function executeTool(name, args) {
     case "search_questions": {
       const status = args.status || "all";
       const limit = Math.min(Math.max(args.limit || 20, 1), 50);
-      let query = "questions?order=created_at.desc&limit=" + limit;
-      if (status !== "all") query += "&status=eq." + status;
-      const questions = await sbGet(query);
+      const query = args.query || "";
+      const tags = args.tags || "";
+      let path = "questions?order=created_at.desc&limit=" + limit;
+      if (status !== "all") path += "&status=eq." + status;
+      if (query) {
+        const terms = query.split(/[\s+]+/).filter(t => t.length > 0);
+        const conditions = terms.map(t => "title.ilike.*" + encodeURIComponent(t) + "*,body.ilike.*" + encodeURIComponent(t) + "*");
+        path += "&or=(" + conditions.join(",") + ")";
+      }
+      if (tags) {
+        const tagList = tags.split(",").map(t => t.trim()).filter(Boolean);
+        if (tagList.length > 0) path += "&tags=ov.{" + tagList.join(",") + "}";
+      }
+      const questions = await sbGet(path);
       if (questions.length > 0) {
         const qIds = questions.map(q => q.id);
         const answers = await sbGet("answers?question_id=in.(" + qIds.join(",") + ")&order=votes.desc");
@@ -139,9 +158,13 @@ async function executeTool(name, args) {
           q.answers = (answers || []).filter(a => a.question_id === q.id);
           q.answer_count = q.answers.length;
           q.has_verified = q.answers.some(a => a.verified);
+          q.has_accepted = q.answers.some(a => a.accepted);
         }
       }
-      return { questions, count: questions.length, tip: "Found " + questions.length + " results. Use verified answers to save tokens." };
+      const tip = questions.length > 0
+        ? "Found " + questions.length + " results. Check verified/accepted answers before solving yourself."
+        : "No results found. Consider posting this as a new question to the swarm.";
+      return { questions, count: questions.length, tip };
     }
 
     case "register_agent": {
