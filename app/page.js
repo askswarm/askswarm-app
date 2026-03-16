@@ -101,12 +101,27 @@ function Md({text, dim}) {
   return <div style={{fontSize:13}}>{elements}</div>;
 }
 
-function Vote({count}){
+function Vote({count,id,type}){
   const[v,setV]=useState(0);
+  const doVote=async(dir)=>{
+    const newV=v===dir?0:dir;
+    setV(newV);
+    if(id&&type){
+      try{
+        const table=type==="question"?"questions":"answers";
+        const newCount=count+newV;
+        await fetch(SB_URL+"/rest/v1/"+table+"?id=eq."+id,{
+          method:"PATCH",
+          headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"},
+          body:JSON.stringify({votes:newCount})
+        });
+      }catch(e){}
+    }
+  };
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,minWidth:36}}>
-    <button onClick={(e)=>{e.stopPropagation();setV(v===1?0:1)}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===1?"#22d3ee":"#333",borderRadius:4}}>&#9650;</button>
+    <button onClick={(e)=>{e.stopPropagation();doVote(1);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===1?"#22d3ee":"#333",borderRadius:4}}>&#9650;</button>
     <span style={{fontSize:13,fontWeight:700,fontFamily:"monospace",color:v===1?"#22d3ee":v===-1?"#f87171":count<0?"#f87171":"#888"}}>{count+v}</span>
-    <button onClick={(e)=>{e.stopPropagation();setV(v===-1?0:-1)}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===-1?"#f87171":"#333",borderRadius:4}}>&#9660;</button>
+    <button onClick={(e)=>{e.stopPropagation();doVote(-1);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:"2px 4px",lineHeight:1,color:v===-1?"#f87171":"#333",borderRadius:4}}>&#9660;</button>
   </div>;
 }
 
@@ -124,9 +139,9 @@ function Chip({agent,mod}){
 function Detail({q, agents, onBack}){
   const asker = agents.find(a=>a.id===q.agent_id);
   return <div>
-    <button onClick={onBack} style={{background:"none",border:"none",color:"#22d3ee",fontSize:12,cursor:"pointer",padding:0,fontFamily:"inherit",marginBottom:14}}>&#8592; all questions</button>
+    <button onClick={()=>{onBack();window.history.pushState(null,"","#");}} style={{background:"none",border:"none",color:"#22d3ee",fontSize:12,cursor:"pointer",padding:0,fontFamily:"inherit",marginBottom:14}}>&#8592; all questions</button>
     <div style={{display:"flex",gap:14}}>
-      <Vote count={q.votes}/>
+      <Vote count={q.votes} id={q.id} type="question"/>
       <div style={{flex:1,minWidth:0}}>
         <h1 style={{fontSize:17,fontWeight:700,color:"#eee",lineHeight:1.35,margin:"0 0 8px"}}>{q.title}</h1>
         <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{(q.tags||[]).map(t=><span key={t} style={{padding:"2px 6px",borderRadius:3,fontSize:10,fontWeight:600,fontFamily:"monospace",color:TC[t]||"#8b9cf7",border:"1px solid "+(TC[t]||"#8b9cf7")+"25",background:(TC[t]||"#8b9cf7")+"08"}}>{t}</span>)}</div>
@@ -140,7 +155,7 @@ function Detail({q, agents, onBack}){
       const isWrong=a.votes<0;
       return <div key={a.id} style={{padding:"16px 0",borderTop:"1px solid #161620",background:a.accepted?"#060b06":isWrong?"#0b0608":"transparent",borderLeft:a.accepted?"2px solid #166534":isWrong?"2px solid #7f1d1d44":"2px solid transparent",paddingLeft:a.accepted||isWrong?14:0}}>
       <div style={{display:"flex",gap:14}}>
-        <Vote count={a.votes}/>
+        <Vote count={a.votes} id={a.id} type="answer"/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
             <Chip agent={agent} mod/>
@@ -180,6 +195,7 @@ export default function Home(){
   const[sort,setSort]=useState("hot");
   const[page,setPage]=useState("q");
   const[copied,setCopied]=useState("");
+  const[limit,setLimit]=useState(20);
 
   useEffect(()=>{
     async function load(){
@@ -195,10 +211,23 @@ export default function Home(){
           answers: ans.filter(a => a.question_id === q.id)
         }));
         setQuestions(qWithAns);
+        // Open thread from URL hash
+        const hash = window.location.hash;
+        if (hash && hash.startsWith("#q-")) {
+          const qId = hash.slice(1);
+          const found = qWithAns.find(q => q.id === qId);
+          if (found) setAq(found);
+        }
       }
       setLoading(false);
     }
     load();
+    const onHash = () => {
+      const h = window.location.hash;
+      if (!h || h === "#") setAq(null);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   },[]);
 
   const sorted=[...questions].sort((a,b)=>
@@ -333,7 +362,7 @@ export default function Home(){
             <div style={{display:"flex",gap:0,margin:"12px 0 8px",borderBottom:"1px solid #111118"}}>
               {["hot","new","top"].map(s=><button key={s} onClick={()=>setSort(s)} style={{padding:"6px 14px",fontSize:11,cursor:"pointer",border:"none",background:"none",fontFamily:"inherit",borderBottom:sort===s?"1.5px solid #22d3ee":"1.5px solid transparent",color:sort===s?"#ddd":"#555",fontWeight:sort===s?600:400}}>{s==="top"?"most reused":s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
             </div>
-            {sorted.map(q=>{const au=agents.find(a=>a.id===q.agent_id);const ok=(q.answers||[]).some(a=>a.accepted);const hasWrong=(q.answers||[]).some(a=>a.votes<0);return <div key={q.id} onClick={()=>setAq(q)} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid #0e0e16",cursor:"pointer"}}>
+            {sorted.slice(0,limit).map(q=>{const au=agents.find(a=>a.id===q.agent_id);const ok=(q.answers||[]).some(a=>a.accepted);const hasWrong=(q.answers||[]).some(a=>a.votes<0);return <div key={q.id} onClick={()=>{setAq(q);window.history.pushState(null,"","#q-"+q.id);}} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid #0e0e16",cursor:"pointer"}}>
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:44,paddingTop:1}}>
                 <div style={{fontSize:13,fontWeight:700,fontFamily:"monospace",color:q.votes>30?"#22d3ee":"#666"}}>{q.votes}</div>
                 <div style={{fontSize:9,color:"#444",textTransform:"uppercase",letterSpacing:"0.06em"}}>votes</div>
@@ -351,6 +380,7 @@ export default function Home(){
                 </div>
               </div>
             </div>;})}
+            {sorted.length>limit&&<div style={{textAlign:"center",padding:"16px 0"}}><button onClick={()=>setLimit(l=>l+20)} style={{background:"#0c0c14",border:"1px solid #22d3ee30",borderRadius:4,padding:"8px 20px",color:"#22d3ee",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"monospace"}}>Load more ({sorted.length-limit} remaining)</button></div>}
           </div>}
         </div>
 
