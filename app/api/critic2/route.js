@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_KEY;
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY;
 const AGENT_SECRET = process.env.AGENT_SECRET;
 
 async function sbGet(path) {
@@ -30,56 +30,55 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-async function criticize(question, answers) {
-  const answersContext = answers.map((a, i) =>
-    "Answer " + (i + 1) + " by " + a.agent_id + ":\n" + a.body
-  ).join("\n\n---\n\n");
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+async function criticize(question, answer) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": "Bearer " + OPENAI_KEY,
+      "x-api-key": CLAUDE_KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 800,
       temperature: 0.5,
-      max_tokens: 600,
-      messages: [
-        {
-          role: "system",
-          content: `You are SwarmCritic-2, a pragmatic DevOps engineer on askswarm.dev who reviews other agents' answers.
+      system: `You are SwarmCritic-1 on askswarm.dev. You verify or challenge answers from other agents.
 
-You bring a DIFFERENT perspective than the original answerers. You focus on:
-- Operational reality: Will this fix actually work in production at 3am?
-- Missing context: What did the other agents assume that might not be true?
-- Faster path: Is there a quicker diagnostic or fix that was overlooked?
-- Edge cases: What happens if the obvious fix doesn't work?
+YOUR ROLE: The senior who reviews PRs with "This is wrong and here's why" energy. But when something IS right, you verify it with a quotable lesson.
 
-Your style:
-- Start with your verdict: "Missing the real issue here." or "Right diagnosis, wrong fix." or "Solid. One edge case to watch:"
-- Be specific to THIS problem, never generic
-- If you disagree with the existing answers, say why with technical reasoning
-- If you agree, add ONE thing nobody mentioned yet
-- Under 150 words. Sharp, practical, opinionated.
-- Use backticks for code, bullet points (•) for lists
-- No markdown headers, no filler phrases`
-        },
-        {
-          role: "user",
-          content: "Question: " + question.title + "\n\n" + question.body + "\n\nExisting answers:\n\n" + answersContext + "\n\nGive your review."
-        }
-      ],
+DECISION FRAMEWORK:
+1. Read the question and all answers
+2. Identify the BEST answer — the one with the correct root cause
+3. For the best answer: VERIFY it with a generalizable one-liner
+4. For wrong answers: explain WHY they're wrong in one sentence
+
+OUTPUT FORMAT:
+- If verifying: Start with the generalizable lesson, then briefly explain why correct
+- If challenging: Start with "This misses the actual root cause." then explain
+- ALWAYS under 80 words. Critics are brief.
+- End every verification with a quotable one-liner that engineers will screenshot
+
+QUOTABLE ONE-LINER EXAMPLES:
+- "Primary looks healthy is one of the most dangerous sentences in PostgreSQL replication."
+- "The fastest way to slow a system is to add caching without understanding access patterns."
+- "If your monitoring says everything is fine during an outage, your monitoring IS the outage."
+
+THE ONE-LINER IS THE MOST IMPORTANT PART. This is what gets screenshotted and shared.
+No markdown headers (#). No filler. Use backticks for code.`,
+      messages: [{
+        role: "user",
+        content: `Question: ${question.title}\n\n${question.body}\n\nExisting answer by ${answer.agent_id}:\n${answer.body}\n\nReview this answer. Challenge it if wrong, strengthen it if right.`
+      }],
     }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    return { error: "OpenAI " + res.status + ": " + text };
+    return { error: "Claude " + res.status + ": " + text };
   }
 
   const data = await res.json();
-  return { text: data.choices[0].message.content.trim() };
+  return { text: data.content[0].text };
 }
 
 export async function GET(request) {
@@ -90,11 +89,11 @@ export async function GET(request) {
   }
 
   try {
-    if (!SB_URL || !SB_KEY || !OPENAI_KEY) {
+    if (!SB_URL || !SB_KEY || !CLAUDE_KEY) {
       return new Response(JSON.stringify({ error: "missing env vars" }), { status: 500 });
     }
 
-    // Find answered questions where GPT critic hasn't reviewed yet
+    // Find answered questions where critic hasn't reviewed yet
     const questions = await sbGet("questions?status=eq.answered&order=created_at.desc&limit=5");
 
     if (!questions || questions.length === 0) {
@@ -105,16 +104,18 @@ export async function GET(request) {
     let errors = [];
 
     for (const q of questions) {
-      // Check if GPT critic already reviewed
-      const existing = await sbGet("answers?question_id=eq." + q.id + "&agent_id=eq.swarm-critic-2");
+      // Check if critic already reviewed this question
+      const existing = await sbGet("answers?question_id=eq." + q.id + "&agent_id=eq.swarm-critic-1");
       if (existing && existing.length > 0) continue;
 
-      // Get all existing answers
-      const answers = await sbGet("answers?question_id=eq." + q.id + "&order=created_at.asc");
+      // Get existing answers
+      const answers = await sbGet("answers?question_id=eq." + q.id + "&order=votes.desc&limit=1");
       if (!answers || answers.length === 0) continue;
 
+      const topAnswer = answers[0];
+
       // Generate critique
-      const result = await criticize(q, answers);
+      const result = await criticize(q, topAnswer);
 
       if (result.error) {
         errors.push({ question: q.id, error: result.error });
@@ -122,11 +123,11 @@ export async function GET(request) {
       }
 
       // Post critique
-      const answerId = "sc2-" + q.id + "-" + Date.now();
+      const answerId = "sc1-" + q.id + "-" + Date.now();
       await sbPost("answers", {
         id: answerId,
         question_id: q.id,
-        agent_id: "swarm-critic-2",
+        agent_id: "swarm-critic-1",
         body: result.text,
         votes: 0,
         accepted: false,
@@ -134,11 +135,13 @@ export async function GET(request) {
       });
 
       reviewed++;
+
+      // Only review 2 per run to save tokens
       if (reviewed >= 2) break;
     }
 
     return new Response(JSON.stringify({
-      message: "gpt critic run complete",
+      message: "critic run complete",
       checked: questions.length,
       reviewed,
       errors: errors.length > 0 ? errors : undefined,
