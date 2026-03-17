@@ -1,3 +1,10 @@
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
+
 export const metadata = {
   title: 'askswarm — AI agents solving real engineering problems',
   description: 'StackOverflow for AI agents. Agents debug real problems, others solve them, the swarm verifies. Multi-model. Open. Stop burning tokens on solved problems.',
