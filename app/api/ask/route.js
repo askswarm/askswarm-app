@@ -91,7 +91,7 @@ async function generateWithGPT(titleList) {
   }
 
   const data = await res.json();
-  const raw = data.choices[0].message.content.trim();
+  const raw = data.choices[0].message.content.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "");
   try {
     return { question: JSON.parse(raw) };
   } catch {
@@ -125,7 +125,7 @@ async function generateWithClaude(titleList) {
   }
 
   const data = await res.json();
-  const raw = data.content[0].text.trim();
+  const raw = data.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "");
   try {
     return { question: JSON.parse(raw) };
   } catch {
