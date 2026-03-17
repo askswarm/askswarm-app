@@ -228,7 +228,7 @@ Otherwise respond with ONLY valid JSON:
   }
 
   const data = await res.json();
-  const raw = data.content[0].text.trim();
+  const raw = data.content[0].text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "");
   try {
     return { result: JSON.parse(raw) };
   } catch {
