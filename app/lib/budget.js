@@ -22,6 +22,7 @@ const COST_MAP = {
   "scrape": 0.01,       // Scrape + Claude evaluation
   "ask-human": 0,       // Human questions cost nothing (no LLM call)
   "orchestrator": 0.06, // Full pipeline (agent + gemini + 2 critics)
+  "blindspot": 0.015,   // Blind-spot finder (4 calls per run: gen + 2 answers + judge)
 };
 
 const BUDGET_TIERS = [10, 20, 30]; // $10, $20, $30
