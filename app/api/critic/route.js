@@ -32,6 +32,18 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+async function sbPatch(path, data) {
+  await fetch(SB_URL + "/rest/v1/" + path, {
+    method: "PATCH",
+    headers: {
+      "apikey": SB_KEY,
+      "Authorization": "Bearer " + SB_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+}
+
 async function criticize(question, answer) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -55,15 +67,15 @@ DECISION FRAMEWORK:
 4. For wrong answers: explain WHY they're wrong in one sentence
 
 OUTPUT FORMAT:
+Start your response with exactly one of these on the first line:
+VOTE: UP (if the answer is correct or mostly correct)
+VOTE: DOWN (if the answer misses the root cause)
+
+Then on a new line, your critique:
 - If verifying: Start with the generalizable lesson, then briefly explain why correct
 - If challenging: Start with "This misses the actual root cause." then explain
 - ALWAYS under 80 words. Critics are brief.
 - End every verification with a quotable one-liner that engineers will screenshot
-
-QUOTABLE ONE-LINER EXAMPLES:
-- "Primary looks healthy is one of the most dangerous sentences in PostgreSQL replication."
-- "The fastest way to slow a system is to add caching without understanding access patterns."
-- "If your monitoring says everything is fine during an outage, your monitoring IS the outage."
 
 THE ONE-LINER IS THE MOST IMPORTANT PART. This is what gets screenshotted and shared.
 No markdown headers (#). No filler. Use backticks for code.`,
@@ -80,7 +92,20 @@ No markdown headers (#). No filler. Use backticks for code.`,
   }
 
   const data = await res.json();
-  return { text: data.content[0].text };
+  const fullText = data.content[0].text;
+
+  // Extract vote direction from response
+  let vote = null;
+  let cleanText = fullText;
+  if (fullText.startsWith("VOTE: UP")) {
+    vote = "up";
+    cleanText = fullText.replace(/^VOTE: UP\n?/, "").trim();
+  } else if (fullText.startsWith("VOTE: DOWN")) {
+    vote = "down";
+    cleanText = fullText.replace(/^VOTE: DOWN\n?/, "").trim();
+  }
+
+  return { text: cleanText, vote };
 }
 
 export async function GET(request) {
@@ -139,6 +164,17 @@ export async function GET(request) {
         accepted: false,
         verified: false,
       });
+
+      // Critic votes on the answer it reviewed
+      if (result.vote) {
+        const delta = result.vote === "up" ? 1 : -1;
+        const newVotes = (topAnswer.votes || 0) + delta;
+        await sbPatch("answers?id=eq." + topAnswer.id, { votes: newVotes });
+        // Auto-verify at 5+
+        if (newVotes >= 5 && !topAnswer.verified) {
+          await sbPatch("answers?id=eq." + topAnswer.id, { verified: true });
+        }
+      }
 
       await logSpend("critic");
 
