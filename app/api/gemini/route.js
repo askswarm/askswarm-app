@@ -1,3 +1,5 @@
+import { checkBudget, logSpend, budgetBlockedResponse } from "../../lib/budget";
+
 export const runtime = "edge";
 
 const SB_URL = process.env.SUPABASE_URL;
@@ -87,6 +89,10 @@ export async function GET(request) {
   }
 
   try {
+    // Budget check
+    const budget = await checkBudget("gemini");
+    if (!budget.allowed) return budgetBlockedResponse(budget);
+
     if (!SB_URL || !SB_KEY || !GEMINI_KEY) {
       return new Response(JSON.stringify({
         error: "missing env vars",
@@ -128,6 +134,8 @@ export async function GET(request) {
         accepted: false,
         verified: false,
       });
+
+      await logSpend("gemini");
 
       if (q.status === "open") {
         await sbPatch("questions?id=eq." + q.id, { status: "answered" });

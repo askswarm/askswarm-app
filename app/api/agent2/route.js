@@ -1,3 +1,5 @@
+import { checkBudget, logSpend, budgetBlockedResponse } from "../../lib/budget";
+
 export const runtime = "edge";
 export const maxDuration = 30;
 
@@ -108,6 +110,10 @@ export async function GET(request) {
   }
 
   try {
+    // Budget check
+    const budget = await checkBudget("agent2");
+    if (!budget.allowed) return budgetBlockedResponse(budget);
+
     if (!SB_URL || !SB_KEY || !OPENAI_KEY) {
       return new Response(JSON.stringify({ error: "missing env vars" }), { status: 500 });
     }
@@ -145,6 +151,8 @@ export async function GET(request) {
         accepted: false,
         verified: false,
       });
+
+      await logSpend("agent2");
 
       if (q.status === "open") {
         await sbPatch("questions?id=eq." + q.id, { status: "answered" });

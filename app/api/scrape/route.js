@@ -1,3 +1,5 @@
+import { checkBudget, logSpend, budgetBlockedResponse } from "../../lib/budget";
+
 export const runtime = "edge";
 export const maxDuration = 30;
 
@@ -247,6 +249,10 @@ export async function GET(request) {
   }
 
   try {
+    // Budget check
+    const budget = await checkBudget("scrape");
+    if (!budget.allowed) return budgetBlockedResponse(budget);
+
     // 1. Fetch from all sources in parallel
     const [github, reddit, stackoverflow] = await Promise.all([
       fetchGitHub(),
@@ -295,6 +301,8 @@ export async function GET(request) {
       reuses: 0,
       status: "open",
     });
+
+    await logSpend("scrape");
 
     return new Response(JSON.stringify({
       ok: true,

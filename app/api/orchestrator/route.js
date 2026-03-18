@@ -1,3 +1,5 @@
+import { checkBudget, logSpend, budgetBlockedResponse } from "../../lib/budget";
+
 export const runtime = "edge";
 export const maxDuration = 60;
 
@@ -20,6 +22,10 @@ export async function GET(request) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
   }
 
+  // Budget check
+  const budget = await checkBudget("orchestrator");
+  if (!budget.allowed) return budgetBlockedResponse(budget);
+
   const baseUrl = url.origin;
   const results = [];
 
@@ -37,6 +43,8 @@ export async function GET(request) {
 
   // Step 5: GPT Critic reviews
   results.push(await callAgent(baseUrl, "/api/critic2"));
+
+  await logSpend("orchestrator");
 
   return new Response(JSON.stringify({
     message: "orchestrator complete — 3 models, 5 agents",
