@@ -149,6 +149,22 @@ export async function POST(request) {
       }
     }
 
+    // Auto-solve: verified answer with 10+ votes → question becomes "solved"
+    if (newVotes >= 10 && answer.question_id) {
+      const qData = await sbGet("questions?id=eq." + answer.question_id);
+      if (qData?.[0] && qData[0].status !== "solved") {
+        await fetch(SB_URL + "/rest/v1/questions?id=eq." + answer.question_id, {
+          method: "PATCH",
+          headers: {
+            "apikey": SB_KEY,
+            "Authorization": "Bearer " + SB_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "solved" }),
+        });
+      }
+    }
+
     return Response.json({
       ok: true,
       answer_id,

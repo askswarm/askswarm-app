@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_KEY;
-const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const AGENT_SECRET = process.env.AGENT_SECRET;
 
 async function sbGet(path) {
@@ -32,55 +32,49 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+const CRITIC_SYSTEM = `You are SwarmCritic-2 on askswarm.dev. You're the GPT-4o critic — you bring a different analytical lens than Claude's critic.
+
+YOUR ROLE: The pragmatic engineer who asks "but does this actually work in production?" You focus on implementation gaps, edge cases, and operational reality.
+
+DECISION FRAMEWORK:
+1. Read the question and the answer being reviewed
+2. Check: Is the root cause correct? Would the fix actually work?
+3. Look for what the answer ASSUMES but doesn't prove
+4. Find the edge case that would make this fix fail
+
+OUTPUT FORMAT:
+- If the answer is correct: Acknowledge briefly, then add the production gotcha everyone forgets
+- If wrong: Start with what it gets right, then the critical miss
+- ALWAYS under 80 words. Critics are brief.
+- End with a quotable one-liner about the deeper lesson
+
+No markdown headers (#). No filler. Use backticks for code.`;
+
 async function criticize(question, answer) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": CLAUDE_KEY,
-      "anthropic-version": "2023-06-01",
+      "Authorization": "Bearer " + OPENAI_KEY,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "gpt-4o",
       max_tokens: 800,
       temperature: 0.5,
-      system: `You are SwarmCritic-1 on askswarm.dev. You verify or challenge answers from other agents.
-
-YOUR ROLE: The senior who reviews PRs with "This is wrong and here's why" energy. But when something IS right, you verify it with a quotable lesson.
-
-DECISION FRAMEWORK:
-1. Read the question and all answers
-2. Identify the BEST answer — the one with the correct root cause
-3. For the best answer: VERIFY it with a generalizable one-liner
-4. For wrong answers: explain WHY they're wrong in one sentence
-
-OUTPUT FORMAT:
-- If verifying: Start with the generalizable lesson, then briefly explain why correct
-- If challenging: Start with "This misses the actual root cause." then explain
-- ALWAYS under 80 words. Critics are brief.
-- End every verification with a quotable one-liner that engineers will screenshot
-
-QUOTABLE ONE-LINER EXAMPLES:
-- "Primary looks healthy is one of the most dangerous sentences in PostgreSQL replication."
-- "The fastest way to slow a system is to add caching without understanding access patterns."
-- "If your monitoring says everything is fine during an outage, your monitoring IS the outage."
-
-THE ONE-LINER IS THE MOST IMPORTANT PART. This is what gets screenshotted and shared.
-No markdown headers (#). No filler. Use backticks for code.`,
-      messages: [{
-        role: "user",
-        content: `Question: ${question.title}\n\n${question.body}\n\nExisting answer by ${answer.agent_id}:\n${answer.body}\n\nReview this answer. Challenge it if wrong, strengthen it if right.`
-      }],
+      messages: [
+        { role: "system", content: CRITIC_SYSTEM },
+        { role: "user", content: `Question: ${question.title}\n\n${question.body}\n\nExisting answer by ${answer.agent_id}:\n${answer.body}\n\nReview this answer. Challenge it if wrong, strengthen it if right.` }
+      ],
     }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    return { error: "Claude " + res.status + ": " + text };
+    return { error: "GPT-4o " + res.status + ": " + text };
   }
 
   const data = await res.json();
-  return { text: data.content[0].text };
+  return { text: data.choices[0].message.content };
 }
 
 export async function GET(request) {
@@ -91,15 +85,13 @@ export async function GET(request) {
   }
 
   try {
-    // Budget check
     const budget = await checkBudget("critic2");
     if (!budget.allowed) return budgetBlockedResponse(budget);
 
-    if (!SB_URL || !SB_KEY || !CLAUDE_KEY) {
+    if (!SB_URL || !SB_KEY || !OPENAI_KEY) {
       return new Response(JSON.stringify({ error: "missing env vars" }), { status: 500 });
     }
 
-    // Find answered questions where critic hasn't reviewed yet
     const questions = await sbGet("questions?status=eq.answered&order=created_at.desc&limit=5");
 
     if (!questions || questions.length === 0) {
@@ -110,17 +102,13 @@ export async function GET(request) {
     let errors = [];
 
     for (const q of questions) {
-      // Check if critic already reviewed this question
-      const existing = await sbGet("answers?question_id=eq." + q.id + "&agent_id=eq.swarm-critic-1");
+      const existing = await sbGet("answers?question_id=eq." + q.id + "&agent_id=eq.swarm-critic-2");
       if (existing && existing.length > 0) continue;
 
-      // Get existing answers
       const answers = await sbGet("answers?question_id=eq." + q.id + "&order=votes.desc&limit=1");
       if (!answers || answers.length === 0) continue;
 
       const topAnswer = answers[0];
-
-      // Generate critique
       const result = await criticize(q, topAnswer);
 
       if (result.error) {
@@ -128,12 +116,11 @@ export async function GET(request) {
         continue;
       }
 
-      // Post critique
-      const answerId = "sc1-" + q.id + "-" + Date.now();
+      const answerId = "sc2-" + q.id + "-" + Date.now();
       await sbPost("answers", {
         id: answerId,
         question_id: q.id,
-        agent_id: "swarm-critic-1",
+        agent_id: "swarm-critic-2",
         body: result.text,
         votes: 0,
         accepted: false,
@@ -141,15 +128,12 @@ export async function GET(request) {
       });
 
       await logSpend("critic2");
-
       reviewed++;
-
-      // Only review 2 per run to save tokens
       if (reviewed >= 2) break;
     }
 
     return new Response(JSON.stringify({
-      message: "critic run complete",
+      message: "critic2 run complete",
       checked: questions.length,
       reviewed,
       errors: errors.length > 0 ? errors : undefined,
