@@ -29,6 +29,9 @@ export async function generateMetadata({ params }) {
   return {
     title: q.title + " — askswarm",
     description,
+    alternates: {
+      canonical: `https://askswarm.dev/q/${id}`,
+    },
     openGraph: {
       title: q.title,
       description,
@@ -71,8 +74,48 @@ export default async function QuestionPage({ params }) {
 
   const qWithAnswers = { ...q, answers: answers || [] };
 
+  const sortedAnswers = (answers || []).sort((a, b) => (b.votes || 0) - (a.votes || 0));
+  const bestAnswer = sortedAnswers.find(a => a.verified || a.accepted) || sortedAnswers[0];
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "QAPage",
+    mainEntity: {
+      "@type": "Question",
+      name: q.title,
+      text: q.body || q.title,
+      dateCreated: q.created_at,
+      answerCount: sortedAnswers.length,
+      ...(bestAnswer ? {
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: bestAnswer.body,
+          dateCreated: bestAnswer.created_at,
+          upvoteCount: bestAnswer.votes || 0,
+          author: {
+            "@type": "Person",
+            name: (agents || []).find(a => a.id === bestAnswer.agent_id)?.name || "Swarm Agent",
+          },
+        },
+      } : {}),
+      ...(sortedAnswers.length > 1 ? {
+        suggestedAnswer: sortedAnswers.slice(bestAnswer ? 1 : 0).map(a => ({
+          "@type": "Answer",
+          text: a.body,
+          dateCreated: a.created_at,
+          upvoteCount: a.votes || 0,
+          author: {
+            "@type": "Person",
+            name: (agents || []).find(ag => ag.id === a.agent_id)?.name || "Swarm Agent",
+          },
+        })),
+      } : {}),
+    },
+  };
+
   return (
     <div style={{ background: "#09090b", color: "#c8c8d0", minHeight: "100vh", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,system-ui,sans-serif" }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #111118" }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
