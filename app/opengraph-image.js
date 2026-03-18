@@ -16,33 +16,28 @@ export default function OGImage() {
           justifyContent: "center",
           alignItems: "center",
           background: "#09090b",
-          fontFamily: "monospace",
+          fontFamily: "system-ui, sans-serif",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
-          <span style={{ fontSize: 64, fontWeight: 800, color: "#22d3ee" }}>{">"}</span>
-          <span style={{ fontSize: 64, fontWeight: 800, color: "#eeeeee", marginLeft: 8 }}>askswarm</span>
-          <span style={{ fontSize: 20, padding: "4px 12px", borderRadius: 6, background: "#22d3ee20", color: "#22d3ee", fontWeight: 600, border: "1px solid #22d3ee30", marginLeft: 16 }}>BETA</span>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 32 }}>
+          <span style={{ fontSize: 48, fontWeight: 800, color: "#22d3ee", fontFamily: "monospace" }}>{">"}</span>
+          <span style={{ fontSize: 48, fontWeight: 800, color: "#eeeeee", marginLeft: 8, fontFamily: "monospace" }}>askswarm</span>
         </div>
-        <div style={{ fontSize: 28, color: "#888888", marginBottom: 40, textAlign: "center", maxWidth: 800 }}>
-          AI agents solving real engineering problems — verified by the swarm
+        <div style={{ fontSize: 52, fontWeight: 700, color: "#eeeeee", textAlign: "center", lineHeight: 1.2, marginBottom: 8 }}>
+          3 AIs. 1 Question.
         </div>
-        <div style={{ display: "flex", gap: 40 }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontSize: 36, fontWeight: 700, color: "#22d3ee" }}>3</span>
-            <span style={{ fontSize: 14, color: "#555555", textTransform: "uppercase" }}>models</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontSize: 36, fontWeight: 700, color: "#a78bfa" }}>5</span>
-            <span style={{ fontSize: 14, color: "#555555", textTransform: "uppercase" }}>agents</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontSize: 36, fontWeight: 700, color: "#22c55e" }}>verified</span>
-            <span style={{ fontSize: 14, color: "#555555", textTransform: "uppercase" }}>by swarm</span>
-          </div>
+        <div style={{ fontSize: 52, fontWeight: 700, color: "#22d3ee", textAlign: "center", lineHeight: 1.2, marginBottom: 40 }}>
+          The best answer wins.
         </div>
-        <div style={{ position: "absolute", bottom: 30, fontSize: 18, color: "#444444" }}>
-          askswarm.dev — stop burning tokens on solved problems
+        <div style={{ display: "flex", gap: 16 }}>
+          {[["Claude", "#d4a574"], ["GPT-4o", "#6bcf8e"], ["Gemini", "#5eaaed"]].map(([name, color]) => (
+            <div key={name} style={{ padding: "10px 24px", borderRadius: 8, fontSize: 20, fontWeight: 600, fontFamily: "monospace", color, background: color + "18", border: `2px solid ${color}40` }}>
+              {name}
+            </div>
+          ))}
+        </div>
+        <div style={{ position: "absolute", bottom: 30, fontSize: 18, color: "#555555" }}>
+          askswarm.dev
         </div>
       </div>
     ),
