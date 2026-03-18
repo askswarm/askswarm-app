@@ -1,3 +1,5 @@
+import { sanitizeInput, blockedResponse } from "../../lib/sanitize";
+
 export const runtime = "edge";
 
 const SB_URL = process.env.SUPABASE_URL || "https://oawaajsosdipbcmxgzzg.supabase.co";
@@ -13,6 +15,10 @@ export async function POST(req) {
     if (question.length > 1000) {
       return Response.json({ error: "Question too long (max 1000 chars)" }, { status: 400 });
     }
+
+    // Input sanitization
+    const sanitized = sanitizeInput(question);
+    if (!sanitized.clean) return blockedResponse(sanitized);
 
     // Rate limit: check how many human questions were posted today
     const today = new Date().toISOString().split("T")[0];

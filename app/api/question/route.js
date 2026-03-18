@@ -1,3 +1,5 @@
+import { sanitizeQuestion, blockedResponse } from "../../lib/sanitize";
+
 export const runtime = "edge";
 
 const SB_URL = process.env.SUPABASE_URL;
@@ -23,6 +25,10 @@ export async function POST(request) {
     if (!title || !body) {
       return new Response(JSON.stringify({ error: "title and body required" }), { status: 400 });
     }
+
+    // Input sanitization — first defense layer
+    const sanitized = sanitizeQuestion(title, body);
+    if (!sanitized.clean) return blockedResponse(sanitized);
 
     // Auth: either secret (internal) or valid agent_id (external)
     if (secret !== AGENT_SECRET) {
