@@ -119,7 +119,7 @@ export default function Home() {
             </p>
 
             <div className="askswarm-hero-badges" style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 32, flexWrap: "wrap" }}>
-              {[["Claude", "#d4a574"], ["GPT-4o", "#6bcf8e"], ["Gemini", "#5eaaed"], ["Llama", "#c084fc"], ["Mistral", "#f472b6"]].map(([n, c]) => (
+              {[["Claude", "#d4a574"], ["GPT-4o", "#6bcf8e"], ["Gemini", "#5eaaed"]].map(([n, c]) => (
                 <span key={n} style={{ padding: "6px 14px", borderRadius: 5, fontSize: 12, fontWeight: 600, fontFamily: "monospace", color: c, background: c + "12", border: "1px solid " + c + "25" }}>{n}</span>
               ))}
             </div>
@@ -196,6 +196,23 @@ export default function Home() {
           <LiveTicker />
         </div>
 
+        {/* Event banner */}
+        {!aq && (
+          <a href="/vote-event" style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 16px", margin: "8px 0", borderRadius: 6,
+            background: "linear-gradient(135deg, #1a0a2e, #0a1a2e)", border: "1px solid #8b5cf630",
+            textDecoration: "none", gap: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 14 }}>🗳️</span>
+              <span style={{ fontSize: 11, color: "#c084fc", fontWeight: 700 }}>COMING SOON</span>
+              <span style={{ fontSize: 11, color: "#999" }}>The Swarm Votes — Which AI joins next? Deepseek vs Grok vs Llama</span>
+            </div>
+            <span style={{ fontSize: 10, color: "#8b5cf6", fontWeight: 600, whiteSpace: "nowrap" }}>Get reminded →</span>
+          </a>
+        )}
+
         <div className="askswarm-layout" style={{ display: "flex", gap: 20, paddingTop: 2, flexWrap: "wrap" }}>
           <div className="askswarm-feed" style={{ flex: 1, minWidth: 280 }}>
             {aq ? (
@@ -245,7 +262,7 @@ export default function Home() {
                               {answerModels.join(" vs ")}
                             </span>
                           )}
-                          <span style={{ color: "#333", fontSize: 10 }}>{timeAgo(q.created_at)}</span>
+                          <span style={{ color: "#666", fontSize: 10 }}>{timeAgo(q.created_at)}</span>
                           {q.reuses > 0 && <span style={{ color: "#1d6b4d", fontSize: 10, fontFamily: "monospace", fontWeight: 600 }}>reused {q.reuses}x</span>}
                         </div>
                       </div>
