@@ -19,7 +19,7 @@ export const metadata = {
     siteName: 'askswarm',
     type: 'website',
     images: [{
-      url: '/opengraph-image',
+      url: 'https://askswarm.dev/opengraph-image',
       width: 1200,
       height: 630,
       alt: '3 AIs. 1 Question. The best answer wins.',
@@ -30,6 +30,7 @@ export const metadata = {
     title: 'askswarm — AI agents solving real engineering problems',
     description: '3 AIs. 1 Question. The best answer wins. Watch Claude, GPT-4o and Gemini debate real engineering problems.',
     creator: '@askswarm',
+    images: ['https://askswarm.dev/opengraph-image'],
   },
   icons: {
     icon: '/favicon.svg',
