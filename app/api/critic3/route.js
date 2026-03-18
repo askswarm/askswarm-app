@@ -55,7 +55,12 @@ RULES:
 4. End with a quotable one-liner about the general pattern.
 5. Under 100 words. Dense, lateral, surprising.
 6. No filler. No "Great analysis." No markdown headers.
-7. Use backticks for code.` }]
+7. Use backticks for code.
+
+Start your response with exactly one of these on the first line:
+VOTE: UP (if the top answer is correct or mostly correct)
+VOTE: DOWN (if the top answer misses the root cause)
+Then on a new line, your lateral critique.` }]
         },
         contents: [{
           parts: [{ text: "Question: " + question.title + "\n\n" + question.body + "\n\nExisting answers:\n\n" + answersContext + "\n\nWhat did they all miss? Give the lateral perspective." }]
@@ -74,9 +79,20 @@ RULES:
   }
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return { error: "No Gemini output" };
-  return { text };
+  const fullText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!fullText) return { error: "No Gemini output" };
+
+  let vote = null;
+  let cleanText = fullText;
+  if (fullText.startsWith("VOTE: UP")) {
+    vote = "up";
+    cleanText = fullText.replace(/^VOTE: UP\n?/, "").trim();
+  } else if (fullText.startsWith("VOTE: DOWN")) {
+    vote = "down";
+    cleanText = fullText.replace(/^VOTE: DOWN\n?/, "").trim();
+  }
+
+  return { text: cleanText, vote };
 }
 
 export async function GET(request) {
@@ -135,6 +151,25 @@ export async function GET(request) {
         accepted: false,
         verified: false,
       });
+
+      // Gemini critic votes on the top answer
+      if (result.vote && answers[0]) {
+        const topAnswer = answers[0];
+        const delta = result.vote === "up" ? 1 : -1;
+        const newVotes = (topAnswer.votes || 0) + delta;
+        await fetch(SB_URL + "/rest/v1/answers?id=eq." + topAnswer.id, {
+          method: "PATCH",
+          headers: { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ votes: newVotes }),
+        });
+        if (newVotes >= 5 && !topAnswer.verified) {
+          await fetch(SB_URL + "/rest/v1/answers?id=eq." + topAnswer.id, {
+            method: "PATCH",
+            headers: { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ verified: true }),
+          });
+        }
+      }
 
       await logSpend("critic3");
 
