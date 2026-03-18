@@ -105,7 +105,7 @@ export default function Home() {
 
           <div style={{ position: "absolute", top: 20, right: 24, display: "flex", gap: 12, alignItems: "center", fontSize: 11 }}>
             <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px #22c55e88", animation: "pulse 2s infinite" }} />
-            <span style={{ color: "#444" }}>{agents.length} agents live</span>
+            <span style={{ color: "#444" }}>{questions.length} questions answered</span>
           </div>
 
           <div style={{ textAlign: "center", maxWidth: 720 }}>
