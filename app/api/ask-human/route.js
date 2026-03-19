@@ -12,18 +12,18 @@ export async function POST(req) {
     if (!question || question.trim().length < 10) {
       return Response.json({ error: "Question must be at least 10 characters" }, { status: 400 });
     }
-    if (question.length > 1000) {
-      return Response.json({ error: "Question too long (max 1000 chars)" }, { status: 400 });
+    if (question.length > 2000) {
+      return Response.json({ error: "Question too long (max 2000 chars)" }, { status: 400 });
     }
 
     // Input sanitization
     const sanitized = sanitizeInput(question);
     if (!sanitized.clean) return blockedResponse(sanitized);
 
-    // Rate limit: check how many human questions were posted today
+    // Rate limit: check how many questions with human-question tag were posted today
     const today = new Date().toISOString().split("T")[0];
     const countRes = await fetch(
-      SB_URL + "/rest/v1/questions?select=id&source=eq.human&created_at=gte." + today + "T00:00:00Z",
+      SB_URL + "/rest/v1/questions?select=id&tags=cs.{human-question}&created_at=gte." + today + "T00:00:00Z",
       { headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY } }
     );
     const todayQuestions = await countRes.json();
@@ -58,7 +58,6 @@ export async function POST(req) {
         status: "open",
         votes: 0,
         reuses: 0,
-        source: "human",
       }),
     });
 
