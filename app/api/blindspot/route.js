@@ -32,15 +32,24 @@ async function sbPost(path, data) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-// Content categories with weights — Holy Wars and Career get 70% of runs
+// ============================================================
+// EVOLUTION CONFIG — adjust weights as audience grows
+// Phase 1 (now):  Dev-focused + Career Bridge
+// Phase 2 (later): Uncomment broader career topics
+// Phase 3 (later): Add society/life topics
+// ============================================================
 const CONTENT_CATEGORIES = [
-  { weight: 40, type: "holy-war" },
-  { weight: 30, type: "career" },
-  { weight: 20, type: "debugging" },
-  { weight: 10, type: "architecture" },
+  { weight: 35, type: "holy-war" },       // Dev opinion battles
+  { weight: 30, type: "career-bridge" },   // "Will AI replace devs?" → bridge to broader audience
+  { weight: 20, type: "debugging" },       // SEO long-tail
+  { weight: 15, type: "architecture" },    // Senior dev engagement
+  // Phase 2: { weight: 20, type: "career-broad" },
+  // Phase 3: { weight: 15, type: "society" },
 ];
 
-// Holy War topics — opinion-based, shareable, every dev has a take
+// ============================================================
+// HOLY WARS — Dev opinion battles, high shareability
+// ============================================================
 const HOLY_WAR_ZONES = [
   {
     area: "vibe coding",
@@ -76,15 +85,26 @@ const HOLY_WAR_ZONES = [
   },
 ];
 
-// Career & Future topics — bigger audience, emotional, highly shareable
-const CAREER_ZONES = [
+// ============================================================
+// CAREER BRIDGE — Dev-focused career/future questions
+// These attract devs AND their non-dev friends
+// ============================================================
+const CAREER_BRIDGE_ZONES = [
   {
     area: "AI replacing devs",
     prompt: "Generate a nuanced question about AI replacing software developers. Not the clickbait version — something specific like 'Which programming specializations will AI eliminate first?', 'Will senior devs become prompt engineers?', 'Is the junior developer career path dead?'. Include data points or a specific scenario that makes the question feel real and urgent.",
   },
   {
+    area: "vibe coding careers",
+    prompt: "Generate a provocative question about how vibe coding changes the developer job market. Examples: 'Will companies hire prompt engineers instead of junior devs?', 'Is vibe coding the new no-code — promising but limited?', 'Should coding bootcamps teach prompt engineering instead of algorithms?'. Make it specific and personal — someone reading this should feel it affects THEIR career.",
+  },
+  {
     area: "CS degree value",
     prompt: "Generate a provocative question about whether a CS degree is worth it in 2026. Consider: bootcamp graduates, self-taught developers, AI tools that lower the barrier. Include specific salary data or career scenarios. The question should be genuinely hard to answer — not just 'yes' or 'no'.",
+  },
+  {
+    area: "junior dev survival",
+    prompt: "Generate a specific question about the future of junior developer roles. Context: junior dev hiring dropped 73%, AI writes 41% of code, but someone still needs to understand systems. Frame it as a real career dilemma: 'You're 22, just graduated CS. AI does everything you learned. What's your move?' The answer should NOT be obvious.",
   },
   {
     area: "remote work",
@@ -102,7 +122,69 @@ const CAREER_ZONES = [
     area: "ageism in tech",
     prompt: "Generate a thought-provoking question about age and career longevity in tech. Examples: 'Should 40+ developers pivot to management?', 'Is the industry's youth obsession getting worse with AI?', 'Can you start a dev career at 35?'. Include specific data or scenarios. This topic generates strong opinions.",
   },
+  {
+    area: "10x engineer myth",
+    prompt: "Generate a provocative question about developer productivity and AI. Examples: 'Is every developer a 10x engineer now with AI?', 'Will AI make the gap between good and bad developers wider or narrower?', 'If AI writes 80% of the code, what skills actually matter?'. Frame around a specific workplace scenario.",
+  },
 ];
+
+// ============================================================
+// PHASE 2 — Broader career topics (uncomment when ready)
+// These reach beyond developers to ALL knowledge workers
+// ============================================================
+/*
+const CAREER_BROAD_ZONES = [
+  {
+    area: "AI replacing lawyers",
+    prompt: "Generate a nuanced question about AI's impact on the legal profession. Despite fears, legal employment grew 6.4% post-AI. But AI now reviews contracts faster than junior associates. Frame it around a specific scenario: 'A law firm replaces 3 paralegals with Claude. The remaining lawyers are more productive but...' Make both 'AI helps' and 'AI threatens' arguments strong.",
+  },
+  {
+    area: "AI replacing designers",
+    prompt: "Generate a provocative question about AI's impact on graphic design and creative work. Context: freelance illustration gigs dropped 17% while overall design employment grew 8%. Frame it around a specific scenario — a designer competing against Midjourney for a client project. The question should feel personal and urgent.",
+  },
+  {
+    area: "AI in accounting",
+    prompt: "Generate a specific question about AI transforming accounting/finance. Context: one firm cut month-end close from 12 days to 4 using AI. Mustafa Suleyman claimed accounting would be 'fully automated within 12-18 months'. Is this real or hype? Frame around a specific career decision someone faces TODAY.",
+  },
+  {
+    area: "AI in education jobs",
+    prompt: "Generate a provocative question about how AI changes teaching. Not 'will AI replace teachers' but something specific: 'Should teachers use AI to grade essays?', 'Is a human tutor still worth $80/hour when Claude is free?', 'Will AI make the best teacher in a rural school as good as the best teacher at Exeter?' Include a real scenario.",
+  },
+  {
+    area: "AI and freelancing",
+    prompt: "Generate a question about how AI is reshaping freelance/gig work across all professions. Frame it around rates, competition, and value: 'If AI can do 80% of what a freelance copywriter does, do you charge for the remaining 20% — or does the entire rate collapse?' Make it specific to a profession.",
+  },
+];
+*/
+
+// ============================================================
+// PHASE 3 — Society/Life topics (uncomment when ready)
+// Maximum audience, highest emotional intensity
+// ============================================================
+/*
+const SOCIETY_ZONES = [
+  {
+    area: "AI and kids",
+    prompt: "Generate a thought-provoking question about children growing up with AI. Context: 7 in 10 teens use AI companion chatbots, California is regulating them. Frame it as a parenting dilemma: specific age, specific scenario, specific risk vs benefit. Not fear-mongering — a genuine question where smart parents disagree.",
+  },
+  {
+    area: "AI therapy",
+    prompt: "Generate a nuanced question about AI as mental health support. Context: Brown University found 15 ethical violations in AI therapy chatbots, but NPR ran 'ChatGPT saved my life'. Frame it around a specific person: 'Your friend can't afford therapy but talks to Claude every night. Is this helping or harmful?' Make both sides compelling.",
+  },
+  {
+    area: "AI and dating",
+    prompt: "Generate a provocative question about AI relationships and dating. Context: 'AI situationships' are a 2026 dating trend, r/MyBoyfriendIsAI is growing. Frame it around a specific scenario that makes people think, not just laugh. The question should work as a conversation starter people share.",
+  },
+  {
+    area: "AI and democracy",
+    prompt: "Generate a specific question about AI's impact on elections and democratic processes. Context: 2026 midterms called 'The Deepfake Election', Senate Republicans released extended deepfake of a politician. Frame it around a specific dilemma voters or lawmakers face. Not partisan — the threat is bipartisan.",
+  },
+  {
+    area: "AI in healthcare",
+    prompt: "Generate a nuanced question about AI in medical diagnosis/treatment. Context: AI detects 64% more epilepsy lesions than radiologists, but also recommended ivermectin for cancer. Frame around a specific patient scenario: 'Your doctor and ChatGPT disagree on your diagnosis. What do you do?' Make it real.",
+  },
+];
+*/
 
 // Technical debugging — SEO long-tail, the StackOverflow replacement
 const DEBUGGING_ZONES = [
@@ -146,7 +228,8 @@ const ARCHITECTURE_ZONES = [
 
 // Pick a zone based on weighted category selection
 function pickZone() {
-  const roll = Math.random() * 100;
+  const totalWeight = CONTENT_CATEGORIES.reduce((sum, c) => sum + c.weight, 0);
+  const roll = Math.random() * totalWeight;
   let cumulative = 0;
   let selectedType = "holy-war";
 
@@ -160,7 +243,9 @@ function pickZone() {
 
   const zones = {
     "holy-war": HOLY_WAR_ZONES,
-    "career": CAREER_ZONES,
+    "career-bridge": CAREER_BRIDGE_ZONES,
+    // "career-broad": CAREER_BROAD_ZONES,  // Phase 2
+    // "society": SOCIETY_ZONES,            // Phase 3
     "debugging": DEBUGGING_ZONES,
     "architecture": ARCHITECTURE_ZONES,
   }[selectedType];
@@ -175,6 +260,7 @@ The question should be SPECIFIC and OPINIONATED enough that two AI models will g
 It should be the kind of question developers share on Twitter because they have strong feelings about it.
 
 For opinion/debate questions: frame them around a specific scenario, not generic "X vs Y".
+For career questions: make it personal — the reader should feel this affects THEIR life decisions.
 For technical questions: include exact code, configs, or error messages.
 
 The title should be quotable — something people screenshot and share.
@@ -258,7 +344,6 @@ async function generateQuestion(zone, existingTitles) {
 }
 
 async function judgeDisagreement(question, claudeAnswer, gptAnswer) {
-  // Use Claude as judge (with explicit instructions to be objective)
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -315,7 +400,7 @@ export async function GET(request) {
     const existing = await sbGet("questions?select=title&order=created_at.desc&limit=20");
     const titles = (existing || []).map(q => q.title);
 
-    // Pick a zone based on weighted categories (70% holy-war + career)
+    // Pick a zone based on weighted categories
     const zone = pickZone();
 
     // Step 1: Generate a question designed to cause disagreement
@@ -327,7 +412,7 @@ export async function GET(request) {
     await logSpend("blindspot"); // GPT-4o call for question gen
 
     // Step 2: Get both models' answers (opinion topics get higher temperature + different prompts)
-    const isOpinion = zone.type === "holy-war" || zone.type === "career";
+    const isOpinion = zone.type === "holy-war" || zone.type === "career-bridge" || zone.type === "career-broad";
     const fullQuestion = question.title + "\n\n" + question.body;
     const [claudeAnswer, gptAnswer] = await Promise.all([
       askClaude(fullQuestion, isOpinion),
@@ -349,12 +434,13 @@ export async function GET(request) {
       return new Response(JSON.stringify({ error: "judgment failed", question: question.title }));
     }
 
-    // Only post if genuine disagreement — lower threshold for opinion topics (they're naturally more shareable)
+    // Only post if genuine disagreement — lower threshold for opinion/career topics
     const viralThreshold = isOpinion ? 5 : 6;
     if ((judgment.disagreement_type !== "major" && judgment.disagreement_type !== "opposite") || judgment.viral_potential < viralThreshold) {
       return new Response(JSON.stringify({
         skipped: true,
         zone: zone.area,
+        type: zone.type,
         question: question.title,
         disagreement: judgment.disagreement_type,
         viral_potential: judgment.viral_potential,
@@ -415,6 +501,7 @@ export async function GET(request) {
     return new Response(JSON.stringify({
       ok: true,
       zone: zone.area,
+      type: zone.type,
       question_id: qId,
       question: question.title,
       disagreement: judgment.disagreement_type,
